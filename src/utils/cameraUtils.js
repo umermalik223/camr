@@ -52,29 +52,83 @@ export const getBestCameraConstraints = async (facingMode = 'user') => {
    * @param {string} dataUrl - The data URL of the image
    * @param {string} filename - Desired filename
    */
-  export const saveImage = (dataUrl, filename = 'camera-capture.png') => {
+  export const saveImage = (dataUrl, filename = 'neocam-capture.png') => {
     // For mobile devices, we need a different approach than desktop
     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-      // Try using the download attribute (works on some mobile browsers)
+      // Create a visible link for mobile devices to see and interact with
+      const downloadDiv = document.createElement('div');
+      downloadDiv.style.position = 'fixed';
+      downloadDiv.style.top = '0';
+      downloadDiv.style.left = '0';
+      downloadDiv.style.width = '100%';
+      downloadDiv.style.height = '100%';
+      downloadDiv.style.backgroundColor = 'rgba(0,0,0,0.85)';
+      downloadDiv.style.display = 'flex';
+      downloadDiv.style.flexDirection = 'column';
+      downloadDiv.style.alignItems = 'center';
+      downloadDiv.style.justifyContent = 'center';
+      downloadDiv.style.zIndex = '9999';
+      downloadDiv.style.fontFamily = 'sans-serif';
+      
+      // Create close button
+      const closeButton = document.createElement('button');
+      closeButton.innerText = 'Close';
+      closeButton.style.position = 'absolute';
+      closeButton.style.top = '20px';
+      closeButton.style.right = '20px';
+      closeButton.style.padding = '8px 16px';
+      closeButton.style.backgroundColor = '#333';
+      closeButton.style.color = 'white';
+      closeButton.style.border = 'none';
+      closeButton.style.borderRadius = '4px';
+      closeButton.style.cursor = 'pointer';
+      closeButton.onclick = () => document.body.removeChild(downloadDiv);
+      
+      // Create image
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.maxWidth = '90%';
+      img.style.maxHeight = '70%';
+      img.style.borderRadius = '8px';
+      img.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+      img.style.marginBottom = '20px';
+      
+      // Create save instructions
+      const instructions = document.createElement('p');
+      instructions.innerText = 'Press and hold the image to save';
+      instructions.style.color = 'white';
+      instructions.style.margin = '16px';
+      instructions.style.textAlign = 'center';
+      
+      // Create download link
       const link = document.createElement('a');
       link.href = dataUrl;
       link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      link.style.padding = '12px 24px';
+      link.style.backgroundColor = '#FF3CAC';
+      link.style.color = 'white';
+      link.style.textDecoration = 'none';
+      link.style.borderRadius = '24px';
+      link.style.fontWeight = 'bold';
+      link.style.display = 'inline-block';
+      link.style.margin = '8px 0';
+      link.innerText = 'Download Image';
+      
+      // Assemble the download div
+      downloadDiv.appendChild(closeButton);
+      downloadDiv.appendChild(img);
+      downloadDiv.appendChild(instructions);
+      downloadDiv.appendChild(link);
+      
+      // Add to body
+      document.body.appendChild(downloadDiv);
       
       // For iOS Safari which doesn't support download attribute well
       if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        // Open in new tab (user can long-press to save)
-        const newTab = window.open();
-        if (newTab) {
-          newTab.document.write(`<img src="${dataUrl}" alt="Captured photo" style="max-width:100%; max-height:100%;">`);
-          newTab.document.title = 'Save your photo';
-          newTab.document.close();
-        }
+        instructions.innerText = 'Press and hold the image, then tap "Save to Photos"';
       }
     } else {
-      // Desktop approach
+      // Desktop approach - simple download
       const link = document.createElement('a');
       link.href = dataUrl;
       link.download = filename;
@@ -88,23 +142,4 @@ export const getBestCameraConstraints = async (facingMode = 'user') => {
    */
   export const isCameraSupported = () => {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  };
-  
-  /**
-   * Get the optimal MIME type for image saving
-   * @returns {string} - The best MIME type ('image/png' or 'image/jpeg')
-   */
-  export const getBestImageType = () => {
-    // PNG is lossless but larger, JPEG is smaller but lossy
-    // Default to PNG for best quality
-    return 'image/png';
-  };
-  
-  /**
-   * Gets the optimal image quality for saving
-   * @returns {number} - Quality value between 0 and 1
-   */
-  export const getOptimalImageQuality = () => {
-    // Return 1 for PNG (lossless), or 0.92 for JPEG (high quality but smaller)
-    return 1;
   };

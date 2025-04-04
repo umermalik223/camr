@@ -1,371 +1,690 @@
-.camera-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    position: relative;
-    overflow: hidden;
-    background-color: #000;
-    color: #fff;
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --neocam-primary: #FF3CAC;
+  --neocam-secondary: #784BA0;
+  --neocam-accent: #2B86C5;
+  --neocam-dark: #13111C;
+  --neocam-light: #ffffff;
+  --neocam-gray: #8888A2;
+  --neocam-bg-gradient: linear-gradient(to bottom, rgba(19, 17, 28, 0) 0%, rgba(19, 17, 28, 0.8) 100%);
+  --neocam-controls-bg: rgba(19, 17, 28, 0.85);
+  --neocam-panel-bg: rgba(19, 17, 28, 0.95);
+  --neocam-border-radius: 16px;
+  --neocam-slider-height: 4px;
+  --neocam-font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Main container */
+.neocam-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  position: relative;
+  overflow: hidden;
+  background-color: var(--neocam-dark);
+  color: var(--neocam-light);
+  font-family: var(--neocam-font);
+}
+
+/* Camera viewfinder */
+.neocam-viewfinder {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: black;
+}
+
+.neocam-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: relative;
+  transition: opacity 0.3s ease;
+}
+
+.neocam-video.hidden {
+  opacity: 0;
+}
+
+.neocam-video.ready {
+  opacity: 1;
+}
+
+/* Grain effect */
+.neocam-video::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: calc(var(--grain-amount, 0) / 100);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+.neocam-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Flash effect */
+.neocam-flash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: white;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1000;
+  transition: opacity 0.1s ease-out;
+}
+
+.neocam-flash.active {
+  opacity: 1;
+}
+
+/* Loading and error states */
+.neocam-loading,
+.neocam-error,
+.neocam-debug-info {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(19, 17, 28, 0.85);
+  z-index: 50;
+  padding: 20px;
+  text-align: center;
+}
+
+.neocam-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--neocam-primary);
+  animation: neocam-spin 1s ease-in-out infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes neocam-spin {
+  to { transform: rotate(360deg); }
+}
+
+.neocam-loading p,
+.neocam-error p,
+.neocam-debug-info p {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.neocam-retry-button {
+  background: linear-gradient(90deg, var(--neocam-primary), var(--neocam-accent));
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-size: 16px;
+  font-family: var(--neocam-font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.neocam-retry-button:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* Main controls bar */
+.neocam-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+  background: var(--neocam-bg-gradient);
+  z-index: 100;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.neocam-controls-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 10px 0;
+}
+
+.neocam-primary-controls {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.neocam-secondary-controls {
+  width: 80px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Main capture button */
+.neocam-capture-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, var(--neocam-primary), var(--neocam-secondary));
+  border: none;
+  position: relative;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(255, 60, 172, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 100;
+}
+
+.neocam-capture-button::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  border-radius: 50%;
+  background-color: transparent;
+  border: 2px solid white;
+  box-sizing: border-box;
+}
+
+.neocam-capture-button:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(255, 60, 172, 0.6);
+}
+
+.neocam-capture-button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.neocam-capture-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Control buttons */
+.neocam-control-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+  border: none;
+  cursor: pointer;
+  gap: 4px;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 100;
+}
+
+.neocam-control-button:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-2px);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.neocam-control-button.active {
+  color: var(--neocam-primary);
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.neocam-control-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.button-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.button-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+/* Flip button specific styles */
+.neocam-flip-button {
+  background-color: rgba(43, 134, 197, 0.4) !important;
+  z-index: 100;
+}
+
+.neocam-flip-button:hover {
+  background-color: rgba(43, 134, 197, 0.6) !important;
+}
+
+/* Captured image controls */
+.neocam-captured-controls {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+.neocam-reset-button,
+.neocam-download-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s, background-color 0.2s;
+  border: none;
+  color: white;
+  z-index: 100;
+}
+
+.neocam-reset-button {
+  background-color: #f44336;
+}
+
+.neocam-download-button {
+  background-color: #4caf50;
+}
+
+.neocam-reset-button:hover,
+.neocam-download-button:hover {
+  transform: scale(1.05);
+}
+
+.neocam-reset-button:active,
+.neocam-download-button:active {
+  transform: scale(0.95);
+}
+
+/* Filter presets panel */
+.neocam-preset-panel {
+  position: absolute;
+  bottom: 100px;
+  left: 0;
+  width: 100%;
+  background-color: var(--neocam-panel-bg);
+  padding: 16px 8px;
+  transform: translateY(100%);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  z-index: 30;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.neocam-preset-panel.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.neocam-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.neocam-panel-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.neocam-preset-wrapper {
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none; /* For Firefox */
+  -ms-overflow-style: none; /* For IE and Edge */
+  padding: 4px;
+}
+
+.neocam-preset-wrapper::-webkit-scrollbar {
+  display: none; /* For Chrome, Safari, and Opera */
+}
+
+.preset-filters-container {
+  display: flex;
+  gap: 12px;
+  padding: 4px 8px;
+}
+
+.preset-filter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: transform 0.2s, background-color 0.2s;
+  position: relative;
+}
+
+.preset-filter:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.preset-filter.active {
+  background-color: rgba(255, 60, 172, 0.2);
+  box-shadow: 0 0 10px rgba(255, 60, 172, 0.3);
+}
+
+.preset-filter-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.preset-filter-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  text-align: center;
+}
+
+.preset-filter-selected {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--neocam-primary);
+}
+
+/* Filter adjustment panel */
+.neocam-adjustment-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--neocam-panel-bg);
+  padding: 20px;
+  padding-top: 16px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 40;
+  max-height: 70vh;
+  overflow-y: auto;
+  border-top-left-radius: var(--neocam-border-radius);
+  border-top-right-radius: var(--neocam-border-radius);
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.neocam-adjustment-panel.visible {
+  transform: translateY(0);
+}
+
+.neocam-panel-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.neocam-reset-filters-button {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  font-size: 14px;
+  font-family: var(--neocam-font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.neocam-reset-filters-button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.neocam-close-panel-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.neocam-close-panel-button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.neocam-filter-controls {
+  padding-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* Filter sliders */
+.filter-slider-control {
+  margin-bottom: 16px;
+}
+
+.filter-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.filter-slider-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+}
+
+.filter-slider-value {
+  font-size: 14px;
+  color: var(--neocam-gray);
+  font-weight: 400;
+}
+
+.filter-range-input {
+  width: 100%;
+  -webkit-appearance: none;
+  height: var(--neocam-slider-height);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  outline: none;
+}
+
+.filter-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, var(--neocam-primary), var(--neocam-secondary));
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.filter-range-input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, var(--neocam-primary), var(--neocam-secondary));
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.filter-range-input::-webkit-slider-runnable-track {
+  height: var(--neocam-slider-height);
+  border-radius: 4px;
+}
+
+.filter-range-input::-moz-range-track {
+  height: var(--neocam-slider-height);
+  border-radius: 4px;
+}
+
+/* Permission screen */
+.neocam-permission-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #13111C, #191727);
+  z-index: 100;
+}
+
+.neocam-permission-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px;
+  max-width: 90%;
+}
+
+.neocam-permission-content svg {
+  margin: 24px 0;
+  color: var(--neocam-primary);
+}
+
+.neocam-permission-content h2 {
+  margin-bottom: 12px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.neocam-permission-content p {
+  margin-bottom: 32px;
+  font-size: 16px;
+  color: var(--neocam-gray);
+  max-width: 300px;
+}
+
+.neocam-permission-button {
+  background: linear-gradient(90deg, var(--neocam-primary), var(--neocam-secondary));
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 28px;
+  font-size: 16px;
+  font-family: var(--neocam-font);
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+  box-shadow: 0 4px 20px rgba(255, 60, 172, 0.4);
+}
+
+.neocam-permission-button:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* Brand logo */
+.neocam-brand {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 200;
+}
+
+.neocam-logo {
+  font-family: var(--neocam-font);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, var(--neocam-primary), var(--neocam-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Media queries */
+@media (max-width: 768px) {
+  .neocam-controls {
+    padding: 12px 8px;
   }
   
-  /* Camera view */
-  .camera-view {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #000;
-  }
-  
-  .camera-feed {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  
-  .captured-image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-  }
-  
-  /* Loading and error states */
-  .loading-overlay,
-  .error-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 0, 0, 0.7);
-    z-index: 10;
-  }
-  
-  .loading-spinner {
-    width: 48px;
-    height: 48px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-radius: 50%;
-    border-top-color: #fff;
-    animation: spin 1s ease-in-out infinite;
-    margin-bottom: 16px;
-  }
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  
-  .error-overlay p {
-    margin-bottom: 16px;
-    text-align: center;
-    padding: 0 20px;
-  }
-  
-  .retry-button {
-    background-color: #2196f3;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  
-  /* Camera controls section */
-  .camera-controls {
-    background-color: #1a1a1a;
-    padding: 16px;
-    z-index: 20;
-  }
-  
-  .controls-inner {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .main-controls {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    gap: 24px;
-    align-items: center;
-  }
-  
-  /* Buttons */
-  .control-button {
-    background-color: transparent;
-    border: none;
-    color: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    border-radius: 50%;
-  }
-  
-  .control-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  .capture-button {
-    background-color: #e91e63;
+  .neocam-capture-button {
     width: 64px;
     height: 64px;
-    border-radius: 50%;
   }
   
-  .capture-button:hover:not(:disabled) {
-    background-color: #d81b60;
-    transform: scale(1.05);
-  }
-  
-  .flip-button {
-    background-color: #2196f3;
+  .neocam-reset-button,
+  .neocam-download-button {
     width: 48px;
     height: 48px;
   }
   
-  .flip-button:hover:not(:disabled) {
-    background-color: #1e88e5;
+  .neocam-filter-controls {
+    grid-template-columns: 1fr;
   }
   
-  .reset-button {
-    background-color: #f44336;
-    width: 48px;
-    height: 48px;
+  .preset-filter {
+    min-width: 56px;
   }
   
-  .reset-button:hover:not(:disabled) {
-    background-color: #e53935;
+  .preset-filter-icon {
+    font-size: 20px;
   }
   
-  .download-button {
-    background-color: #4caf50;
-    width: 48px;
-    height: 48px;
+  .button-label {
+    font-size: 10px;
   }
   
-  .download-button:hover:not(:disabled) {
-    background-color: #43a047;
+  .neocam-control-button {
+    min-width: 60px;
+    padding: 8px 4px;
+  }
+}
+
+/* Safe area insets for iOS devices */
+@supports (padding: max(0px)) {
+  .neocam-controls {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
   
-  .filter-toggle {
-    background-color: #424242;
-    width: 40px;
-    height: 40px;
+  .neocam-adjustment-panel {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
   }
-  
-  .filter-toggle.active {
-    background-color: #7b1fa2;
-  }
-  
-  .filter-toggle:hover:not(:disabled) {
-    background-color: #616161;
-  }
-  
-  /* Filter panel */
-  .filter-panel {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background-color: #212121;
-    padding: 20px;
-    padding-top: 12px;
-    transition: transform 0.3s ease;
-    transform: translateY(100%);
-    z-index: 30;
-    max-height: 60vh;
-    overflow-y: auto;
-    border-top-left-radius: 16px;
-    border-top-right-radius: 16px;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-  }
-  
-  .filter-panel.visible {
-    transform: translateY(0);
-  }
-  
-  .filter-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-  
-  .filter-panel-header h3 {
-    font-size: 16px;
-    font-weight: 500;
-  }
-  
-  .reset-filters-button {
-    font-size: 12px;
-    background-color: #424242;
-    color: white;
-    border: none;
-    padding: 4px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  
-  .reset-filters-button:hover {
-    background-color: #616161;
-  }
-  
-  .filter-controls {
-    padding-bottom: 16px;
-  }
-  
-  .filter-control {
-    margin-bottom: 16px;
-  }
-  
-  .filter-label-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 4px;
-  }
-  
-  .filter-label {
-    font-size: 14px;
-  }
-  
-  .filter-value {
-    font-size: 12px;
-    color: #bdbdbd;
-  }
-  
-  .filter-slider {
-    width: 100%;
-    -webkit-appearance: none;
-    height: 3px;
-    background: #616161;
-    border-radius: 3px;
-    outline: none;
-  }
-  
-  .filter-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #9c27b0;
-    cursor: pointer;
-  }
-  
-  .filter-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #9c27b0;
-    cursor: pointer;
-    border: none;
-  }
-  
-  /* Permission screen */
-  .permission-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #121212;
-    z-index: 100;
-  }
-  
-  .permission-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 24px;
-    max-width: 90%;
-  }
-  
-  .permission-content svg {
-    margin-bottom: 16px;
-    color: #e91e63;
-  }
-  
-  .permission-content h2 {
-    margin-bottom: 8px;
-    font-size: 24px;
-  }
-  
-  .permission-content p {
-    margin-bottom: 24px;
-    font-size: 16px;
-    color: #bdbdbd;
-  }
-  
-  .permission-button {
-    background-color: #2196f3;
-    color: white;
-    border: none;
-    padding: 10px 24px;
-    border-radius: 4px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  
-  .permission-button:hover {
-    background-color: #1e88e5;
-  }
-  
-  /* Mobile optimizations */
-  @media (max-width: 768px) {
-    .camera-controls {
-      padding: 12px;
-    }
-    
-    .capture-button {
-      width: 56px;
-      height: 56px;
-    }
-    
-    .flip-button,
-    .reset-button,
-    .download-button {
-      width: 40px;
-      height: 40px;
-    }
-    
-    .filter-toggle {
-      width: 36px;
-      height: 36px;
-    }
-    
-    .main-controls {
-      gap: 16px;
-    }
-    
-    .filter-panel {
-      padding: 16px;
-      padding-top: 12px;
-    }
-  }
-  
-  /* Safe area insets for iOS devices */
-  @supports (padding: max(0px)) {
-    .camera-controls {
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
-    }
-    
-    .filter-panel {
-      padding-bottom: max(20px, env(safe-area-inset-bottom));
-    }
-  }
+}
