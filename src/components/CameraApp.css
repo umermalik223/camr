@@ -13,6 +13,8 @@
   --neocam-border-radius: 16px;
   --neocam-slider-height: 4px;
   --neocam-font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
 }
 
 /* Main container */
@@ -26,6 +28,35 @@
   background-color: var(--neocam-dark);
   color: var(--neocam-light);
   font-family: var(--neocam-font);
+}
+
+/* iPhone X specific styles */
+.neocam-container.is-iphone-x {
+  /* Adjust for iPhone X notch and home indicator */
+  padding-top: var(--safe-area-inset-top);
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
+/* Double tap hint */
+.neocam-double-tap-hint {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  padding: 8px;
+  font-size: 14px;
+  animation: fadeOut 2s forwards;
+  animation-delay: 3s;
+  z-index: 100;
+  pointer-events: none;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* Camera viewfinder */
@@ -166,6 +197,12 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
+/* Enhanced iPhone X specific controls */
+.neocam-controls.iphone-x-controls {
+  /* Move buttons up to avoid home indicator */
+  bottom: 24px; 
+}
+
 .neocam-controls-inner {
   display: flex;
   justify-content: space-between;
@@ -203,6 +240,12 @@
   z-index: 100;
 }
 
+/* iPhone X specific size adjustment */
+.is-iphone-x .neocam-capture-button {
+  width: 80px;
+  height: 80px;
+}
+
 .neocam-capture-button::before {
   content: '';
   position: absolute;
@@ -235,7 +278,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.6);
   color: white;
   border: none;
   cursor: pointer;
@@ -247,16 +290,24 @@
   z-index: 100;
 }
 
+/* iPhone X specific buttons */
+.is-iphone-x .neocam-control-button {
+  min-width: 60px;
+  min-height: 60px;
+  border-radius: 12px;
+  padding: 10px;
+}
+
 .neocam-control-button:hover:not(:disabled) {
   opacity: 1;
   transform: translateY(-2px);
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
 }
 
 .neocam-control-button.active {
   color: var(--neocam-primary);
   opacity: 1;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .neocam-control-button:disabled {
@@ -269,19 +320,29 @@
   font-weight: 500;
 }
 
+/* Larger buttons for iPhone X */
+.is-iphone-x .button-label {
+  font-size: 14px;
+}
+
 .button-icon {
   font-size: 20px;
   margin-bottom: 2px;
 }
 
+/* Larger icons for iPhone X */
+.is-iphone-x .button-icon {
+  font-size: 24px;
+}
+
 /* Flip button specific styles */
 .neocam-flip-button {
-  background-color: rgba(43, 134, 197, 0.4) !important;
+  background-color: rgba(43, 134, 197, 0.6) !important;
   z-index: 100;
 }
 
 .neocam-flip-button:hover {
-  background-color: rgba(43, 134, 197, 0.6) !important;
+  background-color: rgba(43, 134, 197, 0.8) !important;
 }
 
 /* Captured image controls */
@@ -304,6 +365,13 @@
   border: none;
   color: white;
   z-index: 100;
+}
+
+/* iPhone X specific size adjustment */
+.is-iphone-x .neocam-reset-button,
+.is-iphone-x .neocam-download-button {
+  width: 64px;
+  height: 64px;
 }
 
 .neocam-reset-button {
@@ -338,6 +406,11 @@
   z-index: 30;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* iPhone X panel adjustment */
+.is-iphone-x .neocam-preset-panel {
+  bottom: 140px; /* Move up to avoid home indicator */
 }
 
 .neocam-preset-panel.visible {
@@ -379,6 +452,12 @@
   padding: 4px 8px;
 }
 
+/* Make filter buttons larger on iPhone X */
+.is-iphone-x .preset-filters-container {
+  gap: 16px;
+  padding: 8px 12px;
+}
+
 .preset-filter {
   display: flex;
   flex-direction: column;
@@ -390,6 +469,12 @@
   border-radius: 12px;
   transition: transform 0.2s, background-color 0.2s;
   position: relative;
+}
+
+/* Larger filter buttons for iPhone X */
+.is-iphone-x .preset-filter {
+  min-width: 80px;
+  padding: 10px 6px;
 }
 
 .preset-filter:hover {
@@ -407,11 +492,22 @@
   margin-bottom: 4px;
 }
 
+/* Larger icons for iPhone X */
+.is-iphone-x .preset-filter-icon {
+  font-size: 30px;
+  margin-bottom: 6px;
+}
+
 .preset-filter-name {
   font-size: 12px;
   font-weight: 500;
   color: white;
   text-align: center;
+}
+
+/* Larger text for iPhone X */
+.is-iphone-x .preset-filter-name {
+  font-size: 14px;
 }
 
 .preset-filter-selected {
@@ -442,6 +538,11 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
+/* Adjust for iPhone X home indicator */
+.is-iphone-x .neocam-adjustment-panel {
+  padding-bottom: calc(var(--safe-area-inset-bottom) + 20px);
+}
+
 .neocam-adjustment-panel.visible {
   transform: translateY(0);
 }
@@ -465,6 +566,12 @@
   transition: background-color 0.2s;
 }
 
+/* Larger button for iPhone X */
+.is-iphone-x .neocam-reset-filters-button {
+  padding: 8px 16px;
+  font-size: 16px;
+}
+
 .neocam-reset-filters-button:hover {
   background: rgba(255, 255, 255, 0.25);
 }
@@ -481,6 +588,12 @@
   justify-content: center;
   cursor: pointer;
   transition: background-color 0.2s;
+}
+
+/* Larger close button for iPhone X */
+.is-iphone-x .neocam-close-panel-button {
+  width: 36px;
+  height: 36px;
 }
 
 .neocam-close-panel-button:hover {
@@ -512,10 +625,20 @@
   color: white;
 }
 
+/* Larger text for iPhone X */
+.is-iphone-x .filter-slider-label {
+  font-size: 16px;
+}
+
 .filter-slider-value {
   font-size: 14px;
   color: var(--neocam-gray);
   font-weight: 400;
+}
+
+/* Larger text for iPhone X */
+.is-iphone-x .filter-slider-value {
+  font-size: 16px;
 }
 
 .filter-range-input {
@@ -525,6 +648,11 @@
   background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   outline: none;
+}
+
+/* Larger sliders for iPhone X */
+.is-iphone-x .filter-range-input {
+  height: calc(var(--neocam-slider-height) + 2px);
 }
 
 .filter-range-input::-webkit-slider-thumb {
@@ -538,6 +666,12 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
+/* Larger slider thumb for iPhone X */
+.is-iphone-x .filter-range-input::-webkit-slider-thumb {
+  width: 24px;
+  height: 24px;
+}
+
 .filter-range-input::-moz-range-thumb {
   width: 18px;
   height: 18px;
@@ -546,6 +680,12 @@
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Larger slider thumb for iPhone X */
+.is-iphone-x .filter-range-input::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
 }
 
 .filter-range-input::-webkit-slider-runnable-track {
@@ -626,6 +766,12 @@
   z-index: 200;
 }
 
+/* Adjust for iPhone X notch */
+.is-iphone-x .neocam-brand {
+  top: calc(var(--safe-area-inset-top) + 12px);
+  left: 20px;
+}
+
 .neocam-logo {
   font-family: var(--neocam-font);
   font-weight: 700;
@@ -637,6 +783,11 @@
   background-clip: text;
   text-fill-color: transparent;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Larger logo for iPhone X */
+.is-iphone-x .neocam-logo {
+  font-size: 24px;
 }
 
 /* Media queries */
@@ -675,16 +826,5 @@
   .neocam-control-button {
     min-width: 60px;
     padding: 8px 4px;
-  }
-}
-
-/* Safe area insets for iOS devices */
-@supports (padding: max(0px)) {
-  .neocam-controls {
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-  }
-  
-  .neocam-adjustment-panel {
-    padding-bottom: max(20px, env(safe-area-inset-bottom));
   }
 }

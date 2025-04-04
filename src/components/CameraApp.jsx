@@ -74,15 +74,18 @@ const CameraApp = () => {
   const [showPresets, setShowPresets] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isIphoneX, setIsIphoneX] = useState(false);
   const [error, setError] = useState(null);
   const [cameraPermission, setCameraPermission] = useState(null);
   const [activePreset, setActivePreset] = useState(0);
   const [showFlash, setShowFlash] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [lastTapTime, setLastTapTime] = useState(0);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const flashRef = useRef(null);
+  const viewfinderRef = useRef(null);
 
   // Simple utility functions
   const isCameraSupported = () => {
@@ -99,22 +102,61 @@ const CameraApp = () => {
     };
   };
 
-  // Check if device is mobile
+  // Check if device is mobile and detect iPhone X or newer
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    const checkDevice = () => {
+      // Check if mobile
+      const isMobileDevice = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(isMobileDevice);
+      
+      // Check if iPhone X or newer (has notch and home indicator)
+      const isIphoneXOrNewer = /iPhone/.test(navigator.userAgent) && 
+        (window.screen.height >= 812 || window.screen.width >= 812);
+      setIsIphoneX(isIphoneXOrNewer);
+      
+      if (isIphoneXOrNewer) {
+        // Add a special class to the body for iPhone X+ specific CSS
+        document.body.classList.add('is-iphone-x');
+      }
     };
     
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
     
     // Check for camera support
     if (!isCameraSupported()) {
       setError("Your browser doesn't support camera access. Please try a different browser.");
     }
     
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkDevice);
   }, []);
+
+  // Handle double tap on viewfinder to flip camera
+  useEffect(() => {
+    const handleDoubleTap = (e) => {
+      const now = new Date().getTime();
+      const timeDiff = now - lastTapTime;
+      
+      // Detect double tap (time between taps < 300ms)
+      if (timeDiff < 300 && timeDiff > 0) {
+        flipCamera();
+        e.preventDefault(); // Prevent zoom on double tap
+      }
+      
+      setLastTapTime(now);
+    };
+    
+    const viewfinder = viewfinderRef.current;
+    if (viewfinder) {
+      viewfinder.addEventListener('touchend', handleDoubleTap);
+    }
+    
+    return () => {
+      if (viewfinder) {
+        viewfinder.removeEventListener('touchend', handleDoubleTap);
+      }
+    };
+  }, [lastTapTime]);
 
   // Start camera stream - SIMPLIFIED FOR RELIABILITY
   useEffect(() => {
@@ -311,11 +353,70 @@ const CameraApp = () => {
     // Generate a filename with date and time
     const filename = `neocam-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
     
-    // Save the image
-    const link = document.createElement('a');
-    link.href = dataUrl;
-    link.download = filename;
-    link.click();
+    // Create visible link for mobile devices
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      const downloadDiv = document.createElement('div');
+      downloadDiv.style.position = 'fixed';
+      downloadDiv.style.top = '0';
+      downloadDiv.style.left = '0';
+      downloadDiv.style.width = '100%';
+      downloadDiv.style.height = '100%';
+      downloadDiv.style.backgroundColor = 'rgba(0,0,0,0.85)';
+      downloadDiv.style.display = 'flex';
+      downloadDiv.style.flexDirection = 'column';
+      downloadDiv.style.alignItems = 'center';
+      downloadDiv.style.justifyContent = 'center';
+      downloadDiv.style.zIndex = '9999';
+      
+      // Close button
+      const closeButton = document.createElement('button');
+      closeButton.innerText = 'Close';
+      closeButton.style.position = 'absolute';
+      closeButton.style.top = '20px';
+      closeButton.style.right = '20px';
+      closeButton.style.padding = '10px 20px';
+      closeButton.style.backgroundColor = '#FF3CAC';
+      closeButton.style.color = 'white';
+      closeButton.style.border = 'none';
+      closeButton.style.borderRadius = '20px';
+      closeButton.style.fontWeight = 'bold';
+      closeButton.style.cursor = 'pointer';
+      closeButton.onclick = () => document.body.removeChild(downloadDiv);
+      
+      // Image
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.maxWidth = '90%';
+      img.style.maxHeight = '70%';
+      img.style.borderRadius = '12px';
+      img.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+      img.style.marginBottom = '20px';
+      
+      // Instructions
+      const instructions = document.createElement('p');
+      instructions.innerText = 'Press and hold the image to save';
+      instructions.style.color = 'white';
+      instructions.style.margin = '16px';
+      instructions.style.fontFamily = 'sans-serif';
+      
+      // Add iOS-specific instructions
+      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        instructions.innerText = 'Press and hold the image, then tap "Save to Photos"';
+      }
+      
+      // Assemble
+      downloadDiv.appendChild(closeButton);
+      downloadDiv.appendChild(img);
+      downloadDiv.appendChild(instructions);
+      
+      document.body.appendChild(downloadDiv);
+    } else {
+      // Desktop approach
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      link.click();
+    }
   };
 
   // Apply filter CSS to live preview
@@ -435,7 +536,7 @@ const CameraApp = () => {
   }
 
   return (
-    <div className="neocam-container">
+    <div className={`neocam-container ${isIphoneX ? 'is-iphone-x' : ''}`}>
       {/* Flash effect */}
       <div 
         ref={flashRef} 
@@ -443,7 +544,17 @@ const CameraApp = () => {
       ></div>
       
       {/* Camera View / Captured Image */}
-      <div className="neocam-viewfinder">
+      <div 
+        className="neocam-viewfinder" 
+        ref={viewfinderRef}
+      >
+        {/* Double-tap instructions */}
+        {isMobile && !capturedImage && isCameraReady && (
+          <div className="neocam-double-tap-hint">
+            Double-tap to flip camera
+          </div>
+        )}
+      
         {capturedImage ? (
           <canvas 
             ref={canvasRef} 
@@ -513,7 +624,7 @@ const CameraApp = () => {
       </div>
 
       {/* Controls */}
-      <div className="neocam-controls">
+      <div className={`neocam-controls ${isIphoneX ? 'iphone-x-controls' : ''}`}>
         <div className="neocam-controls-inner">
           {/* Secondary buttons - LEFT SIDE */}
           <div className="neocam-secondary-controls">
