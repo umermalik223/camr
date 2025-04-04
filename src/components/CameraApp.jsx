@@ -1,5 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, RefreshCw, X, Download, Sliders, CheckCircle, Video, Square, Play, Pause, Clock, Zap, Eye, Minimize, Maximize, Sun, Moon } from 'lucide-react';
+import { Camera, RefreshCw, X, Download, Sliders, CheckCircle, Video, Square, Play, Pause, Clock, Zap, Sun, Moon, Eye, Minimize, Maximize } from 'lucide-react';
+import { 
+  getBestCameraConstraints, 
+  saveImage, 
+  isCameraSupported,
+  getUltrawideStyle,
+  applyUltrawideEffect
+} from '../utils/cameraUtils';
 import './CameraApp.css';
 
 // Predefined filters
@@ -86,9 +93,11 @@ const CameraApp = () => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [videoMode, setVideoMode] = useState(false);
   const [cameraCapabilities, setCameraCapabilities] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomLevel, setZoomLevel] = useState(1.0);
+  const [usingWideLens, setUsingWideLens] = useState(false);
   const [exposureLevel, setExposureLevel] = useState(0);
   const [aiMode, setAiMode] = useState(0); // Index of selected AI mode
+  const [imageSource, setImageSource] = useState(null); // Store metadata about captured image
 
   // UI state
   const [filters, setFilters] = useState({
@@ -122,6 +131,7 @@ const CameraApp = () => {
   const [imageWidth, setImageWidth] = useState(0);
   const [imageHeight, setImageHeight] = useState(0);
   const [sceneInfo, setSceneInfo] = useState(null); // For AI scene detection
+  const [showLensTransition, setShowLensTransition] = useState(false);
   
   // Refs
   const videoRef = useRef(null);
@@ -132,45 +142,11 @@ const CameraApp = () => {
   const recordedChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const zoomTimerRef = useRef(null);
+  const lensTransitionRef = useRef(null);
 
   // Simple utility functions
   const isCameraSupported = () => {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-  };
-
-  const getBestCameraConstraints = async (facingMode) => {
-    try {
-      const constraints = {
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 3840 }, // Try for 4K
-          height: { ideal: 2160 },
-          frameRate: { ideal: 60 }
-        },
-        audio: videoMode // Only request audio in video mode
-      };
-      
-      // Advanced constraints if supported
-      if (window.navigator.mediaDevices.getSupportedConstraints) {
-        const supportedConstraints = window.navigator.mediaDevices.getSupportedConstraints();
-        
-        if (supportedConstraints.zoom) {
-          constraints.video.zoom = zoomLevel;
-        }
-        
-        if (supportedConstraints.exposureCompensation) {
-          constraints.video.exposureCompensation = exposureLevel;
-        }
-      }
-      
-      return constraints;
-    } catch (err) {
-      console.error("Error creating constraints:", err);
-      return {
-        video: { facingMode },
-        audio: videoMode
-      };
-    }
   };
 
   // Check if device is mobile and detect iPhone X or newer
@@ -212,78 +188,138 @@ const CameraApp = () => {
         setError(null);
         setIsCameraReady(false);
         
-        console.log("Starting camera with facing mode:", facing, "video mode:", videoMode);
+        // Show lens transition effect when changing zoom levels across 1.0
+        if (zoomLevel < 1 || usingWideLens) {
+          setShowLensTransition(true);
+          setTimeout(() => setShowLensTransition(false), 300);
+        }
+        
+        console.log("Starting camera with facing mode:", facing, "zoom level:", zoomLevel);
         
         // Stop any existing stream
         if (stream) {
           stream.getTracks().forEach(track => track.stop());
         }
         
-        // Get user media with best constraints
-        const constraints = await getBestCameraConstraints(facing);
-        console.log("Using constraints:", constraints);
+        // Determine if we should attempt to use ultrawide mode (zoom < 1)
+        const useUltrawide = zoomLevel < 1;
         
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        if (!mounted) return;
-        
-        setStream(newStream);
-        setCameraPermission(true);
-        
-        // Get camera capabilities (if available)
-        const videoTrack = newStream.getVideoTracks()[0];
-        if (videoTrack && videoTrack.getCapabilities) {
-          try {
-            const capabilities = videoTrack.getCapabilities();
-            console.log("Camera capabilities:", capabilities);
-            setCameraCapabilities(capabilities);
-          } catch (e) {
-            console.log("Could not get camera capabilities:", e);
-          }
-        }
-        
-        // Set video dimensions for canvas
-        if (videoRef.current) {
-          videoRef.current.srcObject = newStream;
+        try {
+          // Get user media with best constraints for current zoom level
+          const constraints = await getBestCameraConstraints(facing, zoomLevel);
+          console.log("Using constraints:", constraints);
           
-          videoRef.current.onloadedmetadata = () => {
-            if (!mounted) return;
+          const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+          
+          if (!mounted) return;
+          
+          // Check if we're using a wide-angle lens by looking at the track settings
+          const videoTrack = newStream.getVideoTracks()[0];
+          const trackSettings = videoTrack.getSettings();
+          console.log("Track settings:", trackSettings);
+          
+          // If we requested ultrawide and have multiple video inputs, 
+          // we might be using a hardware wide lens
+          setUsingWideLens(useUltrawide && trackSettings.deviceId);
+          console.log("Using hardware wide lens:", usingWideLens);
+          
+          setStream(newStream);
+          setCameraPermission(true);
+          
+          // Get camera capabilities (if available)
+          if (videoTrack && videoTrack.getCapabilities) {
+            try {
+              const capabilities = videoTrack.getCapabilities();
+              console.log("Camera capabilities:", capabilities);
+              setCameraCapabilities(capabilities);
+            } catch (e) {
+              console.log("Could not get camera capabilities:", e);
+            }
+          }
+          
+          // Set video dimensions for canvas
+          if (videoRef.current) {
+            videoRef.current.srcObject = newStream;
             
-            const video = videoRef.current;
-            setImageWidth(video.videoWidth);
-            setImageHeight(video.videoHeight);
+            videoRef.current.onloadedmetadata = () => {
+              if (!mounted) return;
+              
+              const video = videoRef.current;
+              setImageWidth(video.videoWidth);
+              setImageHeight(video.videoHeight);
+              setIsLoading(false);
+              
+              video.play()
+                .then(() => {
+                  console.log("Video playing successfully");
+                  setIsCameraReady(true);
+                  
+                  // Start AI scene detection if in relevant mode
+                  if (aiMode === 4) { // Scene Detect mode
+                    startSceneDetection();
+                  }
+                })
+                .catch(e => {
+                  console.error("Error playing video:", e);
+                  setError("Couldn't start video stream. Please reload and try again.");
+                });
+            };
+          }
+        } catch (err) {
+          console.error("Error accessing camera:", err);
+          if (!mounted) return;
+          
+          // If trying to use ultrawide failed, try again with standard camera
+          if (useUltrawide && !usingWideLens) {
+            console.log("Falling back to standard camera with software ultrawide");
+            // Reset to normal camera but keep zoom level for software simulation
+            try {
+              const standardConstraints = await getBestCameraConstraints(facing, 1.0);
+              const standardStream = await navigator.mediaDevices.getUserMedia(standardConstraints);
+              
+              if (!mounted) return;
+              
+              setStream(standardStream);
+              setCameraPermission(true);
+              
+              if (videoRef.current) {
+                videoRef.current.srcObject = standardStream;
+                
+                videoRef.current.onloadedmetadata = () => {
+                  if (!mounted) return;
+                  setIsLoading(false);
+                  videoRef.current.play()
+                    .then(() => {
+                      setIsCameraReady(true);
+                    })
+                    .catch(e => {
+                      console.error("Error playing fallback video:", e);
+                      setError("Couldn't start video stream. Please reload and try again.");
+                    });
+                };
+              }
+            } catch (fallbackErr) {
+              console.error("Error accessing fallback camera:", fallbackErr);
+              setIsLoading(false);
+              setError(`Cannot access camera: ${fallbackErr.message || "Unknown error"}`);
+            }
+          } else {
             setIsLoading(false);
             
-            video.play()
-              .then(() => {
-                console.log("Video playing successfully");
-                setIsCameraReady(true);
-                
-                // Start AI scene detection if in relevant mode
-                if (aiMode === 4) { // Scene Detect mode
-                  startSceneDetection();
-                }
-              })
-              .catch(e => {
-                console.error("Error playing video:", e);
-                setError("Couldn't start video stream. Please reload and try again.");
-              });
-          };
+            if (err.name === 'NotAllowedError') {
+              setCameraPermission(false);
+              setError("Camera access denied. Please allow camera access and reload the page.");
+            } else if (err.name === 'NotFoundError') {
+              setError(`Cannot find a ${facing === 'user' ? 'front' : 'back'} camera. Try switching cameras.`);
+            } else {
+              setError(`Error accessing camera: ${err.message || 'Unknown error'}`);
+            }
+          }
         }
       } catch (err) {
-        console.error("Error accessing camera:", err);
-        if (!mounted) return;
-        
+        console.error("Unexpected error in camera setup:", err);
         setIsLoading(false);
-        
-        if (err.name === 'NotAllowedError') {
-          setCameraPermission(false);
-          setError("Camera access denied. Please allow camera access and reload the page.");
-        } else if (err.name === 'NotFoundError') {
-          setError(`Cannot find a ${facing === 'user' ? 'front' : 'back'} camera. Try switching cameras.`);
-        } else {
-          setError(`Error accessing camera: ${err.message || 'Unknown error'}`);
-        }
+        setError("An unexpected error occurred. Please reload the page.");
       }
     };
     
@@ -326,14 +362,14 @@ const CameraApp = () => {
 
   // Apply filters to captured image
   useEffect(() => {
-    if (capturedImage && canvasRef.current) {
+    if (capturedImage && canvasRef.current && imageSource) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       
       const img = new Image();
       img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = imageSource.width;
+        canvas.height = imageSource.height;
         
         // Apply CSS filters
         ctx.filter = `
@@ -346,9 +382,9 @@ const CameraApp = () => {
           grayscale(${filters.grayscale}%)
         `;
         
-        // Apply wide angle effect if enabled
-        if (filters.wideAngle > 0) {
-          applyWideAngleEffect(ctx, img, canvas.width, canvas.height, filters.wideAngle);
+        // If the image was taken with software ultrawide and not hardware lens
+        if (imageSource.zoomLevel < 1 && !imageSource.usingWideLens) {
+          applyUltrawideEffect(ctx, img, canvas.width, canvas.height, imageSource.zoomLevel);
         } else {
           // Draw the image without flipping
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -374,7 +410,7 @@ const CameraApp = () => {
       };
       img.src = capturedImage;
     }
-  }, [capturedImage, filters]);
+  }, [capturedImage, filters, imageSource]);
 
   // Handle recording timer
   useEffect(() => {
@@ -423,6 +459,7 @@ const CameraApp = () => {
         setShowPresets(false);
         setShowAdvanced(false);
         setShowAiModes(false);
+        setShowZoomSlider(false);
       }
     };
     
@@ -553,85 +590,7 @@ const CameraApp = () => {
     ctx.drawImage(grainCanvas, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
   };
-  
-  // Function to apply simulated wide angle effect
-  const applyWideAngleEffect = (ctx, img, width, height, intensity) => {
-    // Save the original state
-    ctx.save();
-    
-    // Calculate the barrel distortion parameters based on intensity
-    const strength = 0.3 * intensity; // Adjust strength based on intensity
-    const centerX = width / 2;
-    const centerY = height / 2;
-    
-    // Step 1: Clear the canvas
-    ctx.clearRect(0, 0, width, height);
-    
-    // Step 2: Apply the distortion by dividing the image into small chunks
-    const chunkSize = 20; // Size of each chunk
-    
-    for (let y = 0; y < height; y += chunkSize) {
-      for (let x = 0; x < width; x += chunkSize) {
-        // Calculate the position relative to the center
-        const relX = (x - centerX) / centerX;
-        const relY = (y - centerY) / centerY;
-        
-        // Calculate the distance from the center (0 to 1)
-        const distance = Math.sqrt(relX * relX + relY * relY);
-        
-        // Apply the barrel distortion formula
-        const newDistance = distance * (1 - strength * distance * distance);
-        
-        // Only apply distortion if we're not at the center (to avoid division by zero)
-        if (distance > 0) {
-          const ratio = newDistance / distance;
-          
-          // Calculate the new coordinates
-          const newX = centerX + (x - centerX) * ratio;
-          const newY = centerY + (y - centerY) * ratio;
-          
-          // Draw this chunk of the image with distortion
-          ctx.drawImage(
-            img,
-            x, y, chunkSize, chunkSize, // Source rectangle
-            newX, newY, chunkSize, chunkSize // Destination rectangle
-          );
-        } else {
-          // For the center, just draw normally
-          ctx.drawImage(
-            img,
-            x, y, chunkSize, chunkSize, // Source rectangle
-            x, y, chunkSize, chunkSize // Destination rectangle
-          );
-        }
-      }
-    }
-    
-    // Restore the original state
-    ctx.restore();
-    
-    // Add a subtle vignette effect (common in wide angle lenses)
-    addVignetteEffect(ctx, width, height, 0.3 * intensity);
-  };
-  
-  // Add vignette effect (darkened corners)
-  const addVignetteEffect = (ctx, width, height, intensity) => {
-    // Create radial gradient for vignette
-    const gradient = ctx.createRadialGradient(
-      width / 2, height / 2, Math.min(width, height) * 0.4, // Inner circle
-      width / 2, height / 2, Math.max(width, height) * 0.7  // Outer circle
-    );
-    
-    gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, `rgba(0,0,0,${intensity})`);
-    
-    // Apply the vignette
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-    ctx.globalCompositeOperation = 'source-over';
-  };
-  
+
   // Apply simulated portrait mode effect (fake bokeh)
   const applyPortraitEffect = (ctx, width, height) => {
     // Create a gradient that simulates depth of field
@@ -823,12 +782,23 @@ const CameraApp = () => {
     
     const ctx = tempCanvas.getContext('2d');
     
-    // Important: Don't flip the image horizontally
-    ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+    // If using software wide-angle effect and zoom < 1, apply the effect
+    if (!usingWideLens && zoomLevel < 1) {
+      applyUltrawideEffect(ctx, video, tempCanvas.width, tempCanvas.height, zoomLevel);
+    } else {
+      // Normal drawing without distortion (or hardware lens is already wide)
+      ctx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+    }
     
     // Get image as data URL
     const imageDataUrl = tempCanvas.toDataURL('image/png');
     setCapturedImage(imageDataUrl);
+    setImageSource({
+      width: tempCanvas.width,
+      height: tempCanvas.height,
+      zoomLevel, 
+      usingWideLens
+    });
   };
 
   // This function flips the camera
@@ -843,6 +813,7 @@ const CameraApp = () => {
 
   const resetImage = () => {
     setCapturedImage(null);
+    setImageSource(null);
     // Don't reset filters when going back to camera
   };
   
@@ -856,7 +827,85 @@ const CameraApp = () => {
       const dataUrl = canvasRef.current.toDataURL('image/png');
       const filename = `neocam-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       
-      downloadFile(dataUrl, filename);
+      // Create visible link for mobile devices
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        const downloadDiv = document.createElement('div');
+        downloadDiv.style.position = 'fixed';
+        downloadDiv.style.top = '0';
+        downloadDiv.style.left = '0';
+        downloadDiv.style.width = '100%';
+        downloadDiv.style.height = '100%';
+        downloadDiv.style.backgroundColor = 'rgba(0,0,0,0.85)';
+        downloadDiv.style.display = 'flex';
+        downloadDiv.style.flexDirection = 'column';
+        downloadDiv.style.alignItems = 'center';
+        downloadDiv.style.justifyContent = 'center';
+        downloadDiv.style.zIndex = '9999';
+        
+        // Close button
+        const closeButton = document.createElement('button');
+        closeButton.innerText = 'Close';
+        closeButton.style.position = 'absolute';
+        closeButton.style.top = '20px';
+        closeButton.style.right = '20px';
+        closeButton.style.padding = '10px 20px';
+        closeButton.style.backgroundColor = '#FF3CAC';
+        closeButton.style.color = 'white';
+        closeButton.style.border = 'none';
+        closeButton.style.borderRadius = '20px';
+        closeButton.style.fontWeight = 'bold';
+        closeButton.style.cursor = 'pointer';
+        closeButton.onclick = () => document.body.removeChild(downloadDiv);
+        
+        // Media preview
+        const mediaElement = document.createElement('img');
+        mediaElement.src = dataUrl;
+        mediaElement.style.maxWidth = '90%';
+        mediaElement.style.maxHeight = '60%';
+        mediaElement.style.borderRadius = '12px';
+        mediaElement.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+        mediaElement.style.marginBottom = '20px';
+        
+        // Instructions
+        const instructions = document.createElement('p');
+        instructions.style.color = 'white';
+        instructions.style.margin = '16px';
+        instructions.style.fontFamily = 'sans-serif';
+        
+        // Add iOS-specific instructions
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          instructions.innerText = 'Press and hold the image, then tap "Save to Photos"';
+        } else {
+          instructions.innerText = 'Press and hold the image to save';
+        }
+        
+        // Download link
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        link.style.padding = '12px 24px';
+        link.style.backgroundColor = '#4CAF50';
+        link.style.color = 'white';
+        link.style.textDecoration = 'none';
+        link.style.borderRadius = '24px';
+        link.style.fontWeight = 'bold';
+        link.style.fontFamily = 'sans-serif';
+        link.innerText = 'Download Image';
+        
+        // Assemble
+        downloadDiv.appendChild(closeButton);
+        downloadDiv.appendChild(mediaElement);
+        downloadDiv.appendChild(instructions);
+        downloadDiv.appendChild(link);
+        
+        document.body.appendChild(downloadDiv);
+      } else {
+        // Desktop approach
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        link.click();
+      }
     } else if (recordedVideo) {
       // Download recorded video
       const filename = `neocam-video-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
@@ -865,9 +914,89 @@ const CameraApp = () => {
       fetch(recordedVideo)
         .then(res => res.blob())
         .then(blob => {
-          const url = window.URL.createObjectURL(blob);
-          downloadFile(url, filename);
-          window.URL.revokeObjectURL(url);
+          // Mobile solution for video
+          if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            const downloadDiv = document.createElement('div');
+            downloadDiv.style.position = 'fixed';
+            downloadDiv.style.top = '0';
+            downloadDiv.style.left = '0';
+            downloadDiv.style.width = '100%';
+            downloadDiv.style.height = '100%';
+            downloadDiv.style.backgroundColor = 'rgba(0,0,0,0.85)';
+            downloadDiv.style.display = 'flex';
+            downloadDiv.style.flexDirection = 'column';
+            downloadDiv.style.alignItems = 'center';
+            downloadDiv.style.justifyContent = 'center';
+            downloadDiv.style.zIndex = '9999';
+            
+            // Close button
+            const closeButton = document.createElement('button');
+            closeButton.innerText = 'Close';
+            closeButton.style.position = 'absolute';
+            closeButton.style.top = '20px';
+            closeButton.style.right = '20px';
+            closeButton.style.padding = '10px 20px';
+            closeButton.style.backgroundColor = '#FF3CAC';
+            closeButton.style.color = 'white';
+            closeButton.style.border = 'none';
+            closeButton.style.borderRadius = '20px';
+            closeButton.style.fontWeight = 'bold';
+            closeButton.style.cursor = 'pointer';
+            closeButton.onclick = () => document.body.removeChild(downloadDiv);
+            
+            // Video preview
+            const videoElement = document.createElement('video');
+            videoElement.src = recordedVideo;
+            videoElement.controls = true;
+            videoElement.autoplay = true;
+            videoElement.style.maxWidth = '90%';
+            videoElement.style.maxHeight = '60%';
+            videoElement.style.borderRadius = '12px';
+            videoElement.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
+            videoElement.style.marginBottom = '20px';
+            
+            // Instructions
+            const instructions = document.createElement('p');
+            instructions.style.color = 'white';
+            instructions.style.margin = '16px';
+            instructions.style.fontFamily = 'sans-serif';
+            
+            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+              instructions.innerText = 'Tap the share button in the video player to save';
+            } else {
+              instructions.innerText = 'Press and hold the video to save';
+            }
+            
+            // Download link
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.padding = '12px 24px';
+            link.style.backgroundColor = '#4CAF50';
+            link.style.color = 'white';
+            link.style.textDecoration = 'none';
+            link.style.borderRadius = '24px';
+            link.style.fontWeight = 'bold';
+            link.style.fontFamily = 'sans-serif';
+            link.innerText = 'Download Video';
+            
+            // Assemble
+            downloadDiv.appendChild(closeButton);
+            downloadDiv.appendChild(videoElement);
+            downloadDiv.appendChild(instructions);
+            downloadDiv.appendChild(link);
+            
+            document.body.appendChild(downloadDiv);
+          } else {
+            // Desktop approach
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            window.URL.revokeObjectURL(url);
+          }
         })
         .catch(err => {
           console.error("Error downloading video:", err);
@@ -875,112 +1004,11 @@ const CameraApp = () => {
         });
     }
   };
-  
-  // Helper function to download a file
-  const downloadFile = (url, filename) => {
-    // Create visible link for mobile devices
-    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-      const downloadDiv = document.createElement('div');
-      downloadDiv.style.position = 'fixed';
-      downloadDiv.style.top = '0';
-      downloadDiv.style.left = '0';
-      downloadDiv.style.width = '100%';
-      downloadDiv.style.height = '100%';
-      downloadDiv.style.backgroundColor = 'rgba(0,0,0,0.85)';
-      downloadDiv.style.display = 'flex';
-      downloadDiv.style.flexDirection = 'column';
-      downloadDiv.style.alignItems = 'center';
-      downloadDiv.style.justifyContent = 'center';
-      downloadDiv.style.zIndex = '9999';
-      
-      // Close button
-      const closeButton = document.createElement('button');
-      closeButton.innerText = 'Close';
-      closeButton.style.position = 'absolute';
-      closeButton.style.top = '20px';
-      closeButton.style.right = '20px';
-      closeButton.style.padding = '10px 20px';
-      closeButton.style.backgroundColor = '#FF3CAC';
-      closeButton.style.color = 'white';
-      closeButton.style.border = 'none';
-      closeButton.style.borderRadius = '20px';
-      closeButton.style.fontWeight = 'bold';
-      closeButton.style.cursor = 'pointer';
-      closeButton.onclick = () => document.body.removeChild(downloadDiv);
-      
-      // Media preview
-      let mediaElement;
-      if (capturedImage) {
-        mediaElement = document.createElement('img');
-        mediaElement.src = url;
-        mediaElement.style.maxWidth = '90%';
-        mediaElement.style.maxHeight = '60%';
-        mediaElement.style.borderRadius = '12px';
-        mediaElement.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
-        mediaElement.style.marginBottom = '20px';
-      } else {
-        mediaElement = document.createElement('video');
-        mediaElement.src = url;
-        mediaElement.controls = true;
-        mediaElement.autoplay = true;
-        mediaElement.style.maxWidth = '90%';
-        mediaElement.style.maxHeight = '60%';
-        mediaElement.style.borderRadius = '12px';
-        mediaElement.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)';
-        mediaElement.style.marginBottom = '20px';
-      }
-      
-      // Instructions
-      const instructions = document.createElement('p');
-      instructions.style.color = 'white';
-      instructions.style.margin = '16px';
-      instructions.style.fontFamily = 'sans-serif';
-      
-      // Add iOS-specific instructions
-      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        if (capturedImage) {
-          instructions.innerText = 'Press and hold the image, then tap "Save to Photos"';
-        } else {
-          instructions.innerText = 'Tap the share button in the video player to save';
-        }
-      } else {
-        instructions.innerText = capturedImage ? 
-          'Press and hold the image to save' : 
-          'Press and hold the video to save';
-      }
-      
-      // Download link
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.style.padding = '12px 24px';
-      link.style.backgroundColor = '#4CAF50';
-      link.style.color = 'white';
-      link.style.textDecoration = 'none';
-      link.style.borderRadius = '24px';
-      link.style.fontWeight = 'bold';
-      link.style.fontFamily = 'sans-serif';
-      link.innerText = capturedImage ? 'Download Image' : 'Download Video';
-      
-      // Assemble
-      downloadDiv.appendChild(closeButton);
-      downloadDiv.appendChild(mediaElement);
-      downloadDiv.appendChild(instructions);
-      downloadDiv.appendChild(link);
-      
-      document.body.appendChild(downloadDiv);
-    } else {
-      // Desktop approach
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-    }
-  };
 
   // Apply filter CSS to live preview
-  const getFilterStyle = () => {
-    return {
+  const getVideoStyle = () => {
+    // Apply the filter styles
+    const filterStyle = {
       filter: `
         brightness(${filters.brightness}%) 
         contrast(${filters.contrast}%) 
@@ -992,10 +1020,21 @@ const CameraApp = () => {
       `,
       // Handle grain separately via a pseudo-element in CSS with variable
       '--grain-amount': `${filters.grain}%`,
-      // Handle wide angle via distortion in CSS
-      '--distortion-amount': `${filters.wideAngle * 2}%`,
-      transform: `scale(${zoomLevel})`,
-      transformOrigin: 'center'
+    };
+    
+    // If we're using a hardware wide lens, don't apply software distortion
+    if (usingWideLens) {
+      return {
+        ...filterStyle,
+        transform: `scale(${zoomLevel < 1 ? 1 : zoomLevel})`,
+        transformOrigin: 'center'
+      };
+    }
+    
+    // Otherwise apply our ultrawide style for zoom levels < 1
+    return {
+      ...filterStyle,
+      ...getUltrawideStyle(zoomLevel)
     };
   };
 
@@ -1080,6 +1119,69 @@ const CameraApp = () => {
       </div>
     ));
   };
+  
+  // Render zoom slider 
+  const renderZoomSlider = () => {
+    return (
+      <div className={`neocam-zoom-slider ${showZoomSlider ? 'visible' : ''}`}>
+        <div className="zoom-slider-label">
+          <span className="ultrawide-label">0.5x</span>
+          <span className="current-zoom">{zoomLevel.toFixed(1)}x</span>
+          <span className="telephoto-label">5x</span>
+        </div>
+        <input
+          type="range"
+          min="0.5"
+          max="5"
+          step="0.1"
+          value={zoomLevel}
+          onChange={(e) => {
+            const newZoom = parseFloat(e.target.value);
+            setZoomLevel(newZoom);
+            setShowZoomSlider(true);
+            
+            // Apply the new zoom level
+            if (zoomTimerRef.current) {
+              clearTimeout(zoomTimerRef.current);
+            }
+            
+            // Debounce camera reset for zoom changes to avoid too many stream restarts
+            zoomTimerRef.current = setTimeout(() => {
+              // Only restart the camera if:
+              // 1. We're crossing the 1.0 boundary (ultrawide to normal or vice versa)
+              // 2. We're in normal zoom range with hardware zoom capability
+              if ((newZoom < 1 && zoomLevel >= 1) || (newZoom >= 1 && zoomLevel < 1)) {
+                // Signal lens change with transition effect
+                setShowLensTransition(true);
+                setTimeout(() => setShowLensTransition(false), 300);
+              }
+            }, 500);
+          }}
+          className="zoom-range-input"
+        />
+        <div className="zoom-preset-buttons">
+          <button 
+            className={`zoom-preset-button ${Math.abs(zoomLevel - 0.5) < 0.05 ? 'active' : ''}`}
+            onClick={() => setZoomLevel(0.5)}
+          >
+            0.5x
+          </button>
+          <button 
+            className={`zoom-preset-button ${Math.abs(zoomLevel - 1.0) < 0.05 ? 'active' : ''}`}
+            onClick={() => setZoomLevel(1.0)}
+          >
+            1x
+          </button>
+          <button 
+            className={`zoom-preset-button ${Math.abs(zoomLevel - 2.0) < 0.05 ? 'active' : ''}`}
+            onClick={() => setZoomLevel(2.0)}
+          >
+            2x
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   // Render advanced controls
   const renderAdvancedControls = () => {
@@ -1092,7 +1194,7 @@ const CameraApp = () => {
           </div>
           <input
             type="range"
-            min="1"
+            min="0.5"
             max="5"
             step="0.1"
             value={zoomLevel}
@@ -1200,30 +1302,18 @@ const CameraApp = () => {
         className={`neocam-flash ${showFlash ? 'active' : ''}`}
       ></div>
       
+      {/* Lens transition effect */}
+      <div 
+        ref={lensTransitionRef}
+        className={`lens-transition ${showLensTransition ? 'active' : ''}`}
+      ></div>
+      
       {/* Zoom Slider (shows briefly when zooming) */}
-      <div className={`neocam-zoom-slider ${showZoomSlider ? 'visible' : ''}`}>
-        <div className="zoom-slider-label">
-          <Minimize size={16} />
-          <span>{zoomLevel.toFixed(1)}x</span>
-          <Maximize size={16} />
-        </div>
-        <input
-          type="range"
-          min="1"
-          max="5"
-          step="0.1"
-          value={zoomLevel}
-          onChange={(e) => {
-            setZoomLevel(parseFloat(e.target.value));
-            setShowZoomSlider(true);
-          }}
-          className="zoom-range-input"
-        />
-      </div>
+      {renderZoomSlider()}
       
       {/* Camera View / Captured Image / Recorded Video */}
       <div 
-        className="neocam-viewfinder" 
+        className={`neocam-viewfinder ${zoomLevel < 1 ? `video-container ultrawide-${zoomLevel.toString().replace('.', '-')}` : ''}`}
         ref={viewfinderRef}
         onClick={() => {
           // Toggle zoom slider on tap
@@ -1236,6 +1326,14 @@ const CameraApp = () => {
         {isMobile && !capturedImage && !recordedVideo && isCameraReady && (
           <div className="neocam-double-tap-hint">
             Double-tap to flip camera
+          </div>
+        )}
+        
+        {/* Wide angle mode indicator */}
+        {zoomLevel < 1 && isCameraReady && !capturedImage && !recordedVideo && (
+          <div className={`wide-angle-badge ${usingWideLens ? 'hardware' : 'software'}`}>
+            <span className="icon">🌐</span>
+            <span>0.5x {usingWideLens ? 'Ultrawide Lens' : 'Wide Angle'}</span>
           </div>
         )}
         
@@ -1295,8 +1393,8 @@ const CameraApp = () => {
               autoPlay 
               playsInline 
               muted 
-              style={getFilterStyle()}
-              className={`neocam-video ${isCameraReady ? 'ready' : 'hidden'} ${filters.wideAngle > 0 ? 'wide-angle' : ''}`}
+              style={getVideoStyle()}
+              className={`neocam-video ${isCameraReady ? 'ready' : 'hidden'} ${zoomLevel < 1 ? 'wide-angle' : ''}`}
             />
           </>
         )}

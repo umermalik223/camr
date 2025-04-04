@@ -1256,3 +1256,259 @@
     width: calc(50% - 10px);
   }
 }
+
+/* Additional CSS styles for ultrawide camera support */
+
+/* Wide angle video effect */
+.neocam-video.wide-angle {
+    position: relative;
+  }
+  
+  .neocam-video.wide-angle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+      circle at center,
+      transparent 70%,
+      rgba(0, 0, 0, 0.2) 100%
+    );
+    pointer-events: none;
+    opacity: var(--distortion-strength, 0);
+    z-index: 2;
+  }
+  
+  /* Enhanced zoom slider for ultrawide */
+  .neocam-zoom-slider {
+    position: absolute;
+    bottom: 120px;
+    left: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 20px;
+    padding: 12px 16px;
+    z-index: 90;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  
+  .neocam-zoom-slider.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .zoom-slider-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    color: white;
+  }
+  
+  .current-zoom {
+    font-weight: 600;
+    font-size: 16px;
+    color: white;
+  }
+  
+  .ultrawide-label, .telephoto-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .zoom-range-input {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    outline: none;
+  }
+  
+  .zoom-range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
+  
+  .zoom-range-input::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Zoom preset buttons */
+  .zoom-preset-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  
+  .zoom-preset-button {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .zoom-preset-button:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  .zoom-preset-button.active {
+    background-color: var(--neocam-primary);
+    font-weight: 600;
+  }
+  
+  /* Ultrawide indicator */
+  .neocam-ultrawide-indicator {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 6px 12px;
+    border-radius: 16px;
+    color: white;
+    font-weight: 500;
+    font-size: 14px;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .neocam-ultrawide-indicator .icon {
+    font-size: 16px;
+  }
+  
+  /* Wide angle mode badge */
+  .wide-angle-badge {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 90;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: fadeIn 0.3s ease;
+  }
+  
+  .wide-angle-badge.hardware {
+    background-color: rgba(76, 175, 80, 0.6);
+  }
+  
+  .wide-angle-badge.software {
+    background-color: rgba(33, 150, 243, 0.6);
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Additional barrel distortion effect for ultrawide */
+  .video-container.ultrawide-0-5 {
+    position: relative;
+    overflow: hidden;
+    border-radius: 20%;
+  }
+  
+  .video-container.ultrawide-0-6 {
+    position: relative;
+    overflow: hidden;
+    border-radius: 15%;
+  }
+  
+  .video-container.ultrawide-0-7 {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10%;
+  }
+  
+  .video-container.ultrawide-0-8 {
+    position: relative;
+    overflow: hidden;
+    border-radius: 5%;
+  }
+  
+  .video-container.ultrawide-0-9 {
+    position: relative;
+    overflow: hidden;
+    border-radius: 2%;
+  }
+  
+  /* New icons for ultrawide mode */
+  .neocam-icons-bar {
+    position: absolute;
+    bottom: 170px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    z-index: 80;
+  }
+  
+  .neocam-icon-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .neocam-icon-button:hover {
+    background-color: rgba(0, 0, 0, 0.8);
+    transform: scale(1.1);
+  }
+  
+  .neocam-icon-button.active {
+    background-color: var(--neocam-primary);
+  }
+  
+  /* Lens transition effect */
+  .lens-transition {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: black;
+    opacity: 0;
+    z-index: 200;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  
+  .lens-transition.active {
+    opacity: 1;
+  }
